@@ -2,6 +2,24 @@
   "nome": "Estante do João",
   "subtitulo": "Livros que eu leio, estudo e indico: arquitetura tradicional, estética, filosofia e literatura.",
   "tag": "joaoestudos-20",
+  "ofertas": {
+    "conferido_em": "2026-11-18T01:44:00-03:00",
+    "validade_horas": 24,
+    "itens": {
+      "8580633494": "Oferta Black Friday",
+      "852730113X": "Oferta Black Friday",
+      "8582605544": "Com desconto",
+      "6599239234": "Em oferta",
+      "8574658162": "Oferta Black Friday",
+      "8577807770": "Com desconto",
+      "8572838813": "Com desconto",
+      "8582850476": "Em oferta",
+      "8573265507": "Em oferta",
+      "8563560271": "Oferta Black Friday",
+      "8573265388": "Oferta Black Friday",
+      "8582850018": "Oferta Black Friday"
+    }
+  },
   "secoes": [
     {
       "id": "arquitetura",

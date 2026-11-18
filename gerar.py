@@ -9,13 +9,25 @@ Para acrescentar um livro: edite livros.json e rode de novo.
 import html
 import json
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 PASTA = Path(__file__).resolve().parent
 dados = json.loads((PASTA / "livros.json").read_text(encoding="utf-8"))
 TAG = dados["tag"]
 e = html.escape
+
+# Ofertas conferidas à mão: cada selo vale por algumas horas e some sozinho depois (o JavaScript
+# da página compara com o relógio de quem visita). Sem JavaScript, nenhum selo aparece.
+OFERTAS = dados.get("ofertas") or {}
+ITENS_OFERTA = OFERTAS.get("itens") or {}
+if ITENS_OFERTA:
+    _conferido = datetime.fromisoformat(OFERTAS["conferido_em"])
+    OFERTAS_ATE = (_conferido + timedelta(hours=OFERTAS.get("validade_horas", 24))).isoformat()
+    OFERTAS_QUANDO = _conferido.strftime("%d/%m às %Hh%M")
+else:
+    OFERTAS_ATE = ""
+    OFERTAS_QUANDO = ""
 
 AVISO = "Como participante do Programa de Associados da Amazon, sou remunerado pelas compras qualificadas efetuadas."
 
@@ -94,6 +106,21 @@ section.prateleira { display: grid; gap: 18px; scroll-margin-top: 16px; }
   border-bottom: 1px solid currentColor; padding-bottom: 1px; }
 .ver::after { content: " \\2192"; }
 
+/* Selos de oferta: escondidos por padrão; o script só mostra enquanto a conferência vale */
+.capa { position: relative; }
+.selo-oferta, .chip-ofertas, .aviso-ofertas { display: none; }
+.ofertas-validas .selo-oferta { display: inline-block; }
+.ofertas-validas .chip-ofertas { display: inline-flex; }
+.ofertas-validas .aviso-ofertas { display: block; }
+.selo-oferta { position: absolute; top: 12px; right: 12px; background: var(--dourado); color: #1c2026;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.04em; padding: 3px 8px; border-radius: 3px; }
+.livro.em-oferta { border-color: var(--dourado); box-shadow: 0 0 0 1px var(--dourado); }
+.chip-ofertas { align-items: center; gap: 6px; cursor: pointer; font: inherit; font-size: 15px; font-weight: 600;
+  padding: 6px 14px; border-radius: 999px; border: 1px solid var(--tinta); background: var(--tinta); color: var(--papel); }
+.chip-ofertas[aria-pressed="true"] { background: var(--dourado); color: #1c2026; border-color: var(--dourado); }
+.aviso-ofertas { font-size: 13px; color: var(--apagado); }
+.so-ofertas .livro:not(.em-oferta), .so-ofertas .prateleira:not(.tem-oferta) { display: none; }
+
 footer.rodape { border-top: 1px solid var(--linha); padding-top: 18px; display: grid; gap: 6px; color: var(--apagado); font-size: 14px; }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 """
@@ -107,30 +134,54 @@ FONTES = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
 def card(livro, secao):
     link = f"https://www.amazon.com.br/dp/{livro['asin']}?tag={TAG}"
     detalhe = f'<p class="detalhe">{e(livro["detalhe"])}</p>' if livro.get("detalhe") else ""
-    return (f'<article class="livro {secao}">'
-            f'<div class="capa"><h3>{e(livro["titulo"])}</h3><p class="autor">{e(livro["autor"])}</p></div>'
+    oferta = ITENS_OFERTA.get(livro["asin"])
+    classe = f"livro {secao} em-oferta" if oferta else f"livro {secao}"
+    selo = f'<span class="selo-oferta">★ {e(oferta)}</span>' if oferta else ""
+    return (f'<article class="{classe}">'
+            f'<div class="capa">{selo}<h3>{e(livro["titulo"])}</h3><p class="autor">{e(livro["autor"])}</p></div>'
             f'<div class="corpo">{detalhe}<p class="nota">{e(livro["nota"])}</p>'
             f'<a class="ver" href="{e(link)}" target="_blank" rel="sponsored noopener">Ver na Amazon</a></div>'
             f'</article>')
 
 
+SCRIPT = """<script>
+(function () {
+  var p = document.querySelector('.pagina');
+  var ate = p && p.getAttribute('data-ofertas-ate');
+  if (!ate || Date.now() >= Date.parse(ate)) return;
+  p.classList.add('ofertas-validas');
+  var b = document.querySelector('.chip-ofertas');
+  if (b) b.addEventListener('click', function () {
+    var on = p.classList.toggle('so-ofertas');
+    b.setAttribute('aria-pressed', String(on));
+  });
+})();
+</script>"""
+
+
 def corpo():
     total = sum(len(s["livros"]) for s in dados["secoes"])
+    n_ofertas = sum(1 for s in dados["secoes"] for l in s["livros"] if l["asin"] in ITENS_OFERTA)
     nav = "".join(f'<a href="#{s["id"]}">{e(s["nome"])}</a>' for s in dados["secoes"])
-    secoes = "".join(
-        f'<section class="prateleira" id="{s["id"]}" aria-labelledby="t-{s["id"]}">'
-        f'<div class="prateleira-topo"><h2 id="t-{s["id"]}">{e(s["nome"])}</h2><p>{e(s["descricao"])}</p></div>'
-        f'<div class="livros">{"".join(card(l, s["id"]) for l in s["livros"])}</div></section>'
-        for s in dados["secoes"])
+    if n_ofertas:
+        nav += f'<button type="button" class="chip-ofertas" aria-pressed="false">★ Em oferta ({n_ofertas})</button>'
+    aviso_ofertas = (f'<p class="aviso-ofertas">★ Ofertas conferidas na Amazon em {OFERTAS_QUANDO}. '
+                     f'Preço e desconto podem ter mudado; confira na página do livro.</p>') if n_ofertas else ""
+    secoes = ""
+    for s in dados["secoes"]:
+        tem = any(l["asin"] in ITENS_OFERTA for l in s["livros"])
+        secoes += (f'<section class="prateleira{" tem-oferta" if tem else ""}" id="{s["id"]}" aria-labelledby="t-{s["id"]}">'
+                   f'<div class="prateleira-topo"><h2 id="t-{s["id"]}">{e(s["nome"])}</h2><p>{e(s["descricao"])}</p></div>'
+                   f'<div class="livros">{"".join(card(l, s["id"]) for l in s["livros"])}</div></section>')
     hoje = date.today().strftime("%d/%m/%Y")
-    return (f'<div class="pagina">'
+    return (f'<div class="pagina" data-ofertas-ate="{e(OFERTAS_ATE)}">'
             f'<header class="exlibris"><span class="rotulo">Ex libris · {total} livros</span>'
             f'<h1>{e(dados["nome"])}</h1><p class="sub">{e(dados["subtitulo"])}</p>'
-            f'<nav class="assuntos" aria-label="Assuntos">{nav}</nav></header>'
+            f'<nav class="assuntos" aria-label="Assuntos">{nav}</nav>{aviso_ofertas}</header>'
             f'{secoes}'
             f'<footer class="rodape"><p>{e(AVISO)}</p>'
             f'<p>Os links levam à Amazon.com.br. Preço e disponibilidade são os que a Amazon mostrar no momento da compra.</p>'
-            f'<p>Estante atualizada em {hoje}.</p></footer></div>')
+            f'<p>Estante atualizada em {hoje}.</p></footer></div>{SCRIPT}')
 
 
 def cabeca(com_meta_artifact: bool):
