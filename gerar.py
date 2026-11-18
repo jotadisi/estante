@@ -5,9 +5,11 @@
     python gerar.py caminho.html    -> também escreve uma prévia sem <html>/<head> (formato de Artifact)
 
 Para acrescentar um livro: edite livros.json e rode de novo.
+Capa: ponha a imagem em capas/ASIN.jpg (400 px de largura basta). Sem imagem, o livro ganha a capa desenhada.
 """
 import html
 import json
+import struct
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -30,6 +32,28 @@ else:
     OFERTAS_QUANDO = ""
 
 AVISO = "Como participante do Programa de Associados da Amazon, sou remunerado pelas compras qualificadas efetuadas."
+
+
+def dimensoes_jpeg(caminho: Path):
+    """Largura e altura de um JPEG, para o navegador reservar o espaço da capa antes de ela carregar."""
+    b = caminho.read_bytes()
+    i = 2
+    while i < len(b) - 9:
+        if b[i] != 0xFF:
+            i += 1
+            continue
+        if b[i + 1] in (0xC0, 0xC1, 0xC2):
+            altura, largura = struct.unpack(">HH", b[i + 5:i + 9])
+            return largura, altura
+        i += 2 + struct.unpack(">H", b[i + 2:i + 4])[0]
+    return None
+
+
+CAPAS = {}
+for _arq in sorted((PASTA / "capas").glob("*.jpg")):
+    _dim = dimensoes_jpeg(_arq)
+    if _dim:
+        CAPAS[_arq.stem] = _dim
 
 CSS = """
 /* Layout: ex-libris no topo, depois uma prateleira por assunto; cada livro é uma capa
@@ -106,6 +130,16 @@ section.prateleira { display: grid; gap: 18px; scroll-margin-top: 16px; }
   border-bottom: 1px solid currentColor; padding-bottom: 1px; }
 .ver::after { content: " \\2192"; }
 
+/* Livro com foto da capa: a capa fica de pé sobre o tecido da prateleira; título e autor descem para o corpo */
+.com-capa .capa { height: 270px; min-height: 0; padding: 20px 18px; display: grid; place-items: center; align-content: center; }
+.com-capa .capa a { display: block; line-height: 0; max-width: 100%; }
+.com-capa .capa img { display: block; width: auto; height: auto; max-width: 100%; max-height: 228px; border-radius: 1px 3px 3px 1px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 22px rgba(0,0,0,.35); }
+.ficha { display: grid; gap: 3px; }
+.ficha h3 { font-size: 22px; line-height: 1.15; }
+.ficha .autor { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--apagado); }
+.selo-oferta { z-index: 1; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+
 /* Selos de oferta: escondidos por padrão; o script só mostra enquanto a conferência vale */
 .capa { position: relative; }
 .selo-oferta, .chip-ofertas, .aviso-ofertas { display: none; }
@@ -137,10 +171,19 @@ def card(livro, secao):
     oferta = ITENS_OFERTA.get(livro["asin"])
     classe = f"livro {secao} em-oferta" if oferta else f"livro {secao}"
     selo = f'<span class="selo-oferta">★ {e(oferta)}</span>' if oferta else ""
+    ver = f'<a class="ver" href="{e(link)}" target="_blank" rel="sponsored noopener">Ver na Amazon</a>'
+    dim = CAPAS.get(livro["asin"])
+    if dim:
+        # A imagem repete o link do botão; fica fora da ordem de tabulação para não ser lida duas vezes
+        return (f'<article class="{classe} com-capa">'
+                f'<div class="capa">{selo}<a href="{e(link)}" target="_blank" rel="sponsored noopener" tabindex="-1" aria-hidden="true">'
+                f'<img src="capas/{e(livro["asin"])}.jpg" width="{dim[0]}" height="{dim[1]}" alt="" loading="lazy" decoding="async"></a></div>'
+                f'<div class="corpo"><div class="ficha"><h3>{e(livro["titulo"])}</h3><p class="autor">{e(livro["autor"])}</p></div>'
+                f'{detalhe}<p class="nota">{e(livro["nota"])}</p>{ver}</div>'
+                f'</article>')
     return (f'<article class="{classe}">'
             f'<div class="capa">{selo}<h3>{e(livro["titulo"])}</h3><p class="autor">{e(livro["autor"])}</p></div>'
-            f'<div class="corpo">{detalhe}<p class="nota">{e(livro["nota"])}</p>'
-            f'<a class="ver" href="{e(link)}" target="_blank" rel="sponsored noopener">Ver na Amazon</a></div>'
+            f'<div class="corpo">{detalhe}<p class="nota">{e(livro["nota"])}</p>{ver}</div>'
             f'</article>')
 
 
@@ -181,6 +224,7 @@ def corpo():
             f'{secoes}'
             f'<footer class="rodape"><p>{e(AVISO)}</p>'
             f'<p>Os links levam à Amazon.com.br. Preço e disponibilidade são os que a Amazon mostrar no momento da compra.</p>'
+            f'{"<p>Imagens de capa: © das respectivas editoras.</p>" if CAPAS else ""}'
             f'<p>Estante atualizada em {hoje}.</p></footer></div>{SCRIPT}')
 
 
