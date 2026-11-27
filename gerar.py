@@ -19,9 +19,12 @@ dados = json.loads((PASTA / "livros.json").read_text(encoding="utf-8"))
 TAG = dados["tag"]
 e = html.escape
 
-# Ofertas conferidas à mão: cada selo vale por algumas horas e some sozinho depois (o JavaScript
-# da página compara com o relógio de quem visita). Sem JavaScript, nenhum selo aparece.
-OFERTAS = dados.get("ofertas") or {}
+# Ofertas: o ofertas.py grava ofertas.json todo dia com a API da Amazon (no GitHub Actions).
+# Cada selo vale por algumas horas e some sozinho depois (o JavaScript da página compara com o
+# relógio de quem visita). Sem JavaScript, nenhum selo aparece.
+_ARQ_OFERTAS = PASTA / "ofertas.json"
+OFERTAS = (json.loads(_ARQ_OFERTAS.read_text(encoding="utf-8")) if _ARQ_OFERTAS.exists()
+           else dados.get("ofertas")) or {}
 ITENS_OFERTA = OFERTAS.get("itens") or {}
 if ITENS_OFERTA:
     _conferido = datetime.fromisoformat(OFERTAS["conferido_em"])

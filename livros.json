@@ -2,24 +2,6 @@
   "nome": "Estante do João",
   "subtitulo": "Livros que eu leio, estudo e indico: arquitetura tradicional, estética, filosofia e literatura.",
   "tag": "joaoestudos-20",
-  "ofertas": {
-    "conferido_em": "2026-11-25T12:33:00-03:00",
-    "validade_horas": 24,
-    "criterio": "monitor de preços (API da Amazon): 40% ou mais abaixo do preço de capa",
-    "itens": {
-      "6599239234": "Em oferta",
-      "8577807770": "Em oferta",
-      "8582850476": "Em oferta",
-      "8595071985": "Em oferta",
-      "8594090196": "Em oferta",
-      "8594090781": "Em oferta",
-      "857326120X": "Em oferta",
-      "8563560271": "Em oferta",
-      "8563560557": "Em oferta",
-      "8573265388": "Em oferta",
-      "8582850018": "Em oferta"
-    }
-  },
   "secoes": [
     {
       "id": "arquitetura",
